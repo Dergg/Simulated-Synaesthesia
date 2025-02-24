@@ -28,7 +28,7 @@ parser.add_argument('infile')
 parser.add_argument('-live', '--live_video', action='store_true') # Optionally shows the MP4 file in a window
 args = parser.parse_args()
 
-aud_path = f'./mp3s/{args.infile}.mp3' # Only works with MP3 files!
+aud_path = f'./wavs/{args.infile}.wav' # Only works with WAV files!
 y, sr = lib.load(aud_path, sr=44100) # y = waveform | SR = sample rate
 
 spec = np.abs(librosa.stft(y, hop_length = 512, n_fft=2048*4)) # Frequency visualisation of sounds
@@ -40,29 +40,17 @@ spec_db = lib.amplitude_to_db(spec, ref=np.max) # Convert the spectrogram to dec
 # plt.title('Spectrogram')
 # plt.show() # Spectrogram works fine.
 
-tempo, beats = librosa.beat.beat_track(y=y, sr=sr) # Pretty self-explanatory here
+# tempo, beats = librosa.beat.beat_track(y=y, sr=sr) # Pretty self-explanatory here
 # print(f'Tempo estimate: {tempo} BPM')
 # Actual tempo is 124 BPM, algorithm says 123, sub 1% error is good.
 
-mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13) # Sound timbre
-# plt.figure(figsize=(10,4))
-# librosa.display.specshow(mfccs, x_axis='time', sr=sr)
-# plt.colorbar(label='MFCC')
-# plt.title('MFCCs')
-# plt.show() # MFCC works fine.
+# mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13) # Sound timbre
+# MFCC works fine.
 
-rms = librosa.feature.rms(y=y)[0] # Loudness / Intensity
-times = librosa.times_like(rms, sr=sr)
-# plt.plot(times, rms)
-# plt.title('RMS energy')
-# plt.show() # RMS shows correctly over time
+# rms = librosa.feature.rms(y=y)[0] # Loudness / Intensity
+# times = librosa.times_like(rms, sr=sr# RMS shows correctly over time
 
-chromagram = librosa.feature.chroma_stft(y=y, sr=sr) # Show musical notes
-# plt.figure(figsize=(10,4))
-# librosa.display.specshow(chromagram, x_axis='time', y_axis='chroma', sr=sr)
-# plt.colorbar(label='Chroma Intensity')
-# plt.title('Chromagram')
-# plt.show()
+# chromagram = librosa.feature.chroma_stft(y=y, sr=sr) # Show musical notes
 # Chromagram seems correct
 
 def clamp(min, max, val):
@@ -135,6 +123,7 @@ for c in freqs:
 t = pygame.time.get_ticks()
 getTicksLastFrame = t
 
+pygame.mixer.init()
 pygame.mixer.music.load(aud_path)
 pygame.mixer.music.play(0)
 
