@@ -54,14 +54,16 @@ WIDTH, HEIGHT, FPS = 1280, 720, 30
 fig, ax = plt.subplots(figsize=(WIDTH / 100, HEIGHT / 100), dpi=100)
 ax.set_xlim(0, len(freqs))
 ax.set_ylim(0, 100)
-ax.set_xlabel("Frequency Bins")
+#ax.set_xlabel("Frequency Bins")
 ax.set_ylabel("Amplitude (dB)")
 
-bars = [AudioBar(x, f, width=5, max_height=100) for x, f in enumerate(freqs)]
+
+## Please note: having wider bars does not mean it'll take less time to make
+bars = [AudioBar(x, f, width=2, max_height=100) for x, f in enumerate(freqs)]
 bar_patches = ax.bar([b.x for b in bars], [b.height for b in bars], width=5, color='r')
 
 # FFmpeg subprocess for direct encoding
-output_video = "./mp4s/final_output.mp4"
+output_video = f"./mp4s/{args.infile}-vis.mp4"
 ffmpeg_cmd = [
     "ffmpeg",
     "-y",  # Overwrite output file
