@@ -39,7 +39,7 @@ def clamp(min_val, max_val, val):
 
 # Audio bar class
 class AudioBar:
-    def __init__(self, x, freq, width=10, min_height=10, max_height=100, min_decibel=-80, max_decibel=0):
+    def __init__(self, x, freq, width=10, min_height=0, max_height=100, min_decibel=-80, max_decibel=0):
         self.x, self.freq = x, freq
         self.width, self.min_height, self.max_height = width, min_height, max_height
         self.height = min_height
@@ -61,7 +61,7 @@ bars = [AudioBar(x, f, width=5, max_height=100) for x, f in enumerate(freqs)]
 bar_patches = ax.bar([b.x for b in bars], [b.height for b in bars], width=5, color='r')
 
 # FFmpeg subprocess for direct encoding
-output_video = "final_output.mp4"
+output_video = "./mp4s/final_output.mp4"
 ffmpeg_cmd = [
     "ffmpeg",
     "-y",  # Overwrite output file
