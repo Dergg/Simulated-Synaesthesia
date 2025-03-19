@@ -6,11 +6,18 @@ import subprocess
 import argparse
 import random
 import os
+import logging
+
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='PSvis', description='Programmatic Synaesthesia Visualisation algorithm')
 parser.add_argument('infile')
+parser.add_argument('-d', '--debug', action='store_true')
 args = parser.parse_args()
+
+if args.debug == True:
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(filename='debug.log')
 
 # Create output directory if it doesn't exist
 if not os.path.exists('./mp4s'):
@@ -35,23 +42,31 @@ WIDTH, HEIGHT, FPS = 1280, 720, 30
 fig, ax = plt.subplots(figsize=(WIDTH / 100, HEIGHT / 100), dpi=100)
 
 class Particle:
-    def __init__(self, x, y, color, size, speed, lifetime=3):
+    def __init__(self, x, y, colour, size, speed, lifetime=3):
         self.x = x
         self.y = y
-        self.color = color
+        self.colour = colour
         self.size = size
         self.speed = speed
-        self.start_time = 0
+        self.start_time = None
         self.lifetime = lifetime
         self.alpha = 1.0
 
     def update(self, time_pos):
+        if self.start_time == None:
+            self.start_time = time_pos
         elapsed_time = time_pos - self.start_time
-        self.alpha = max(0, 1 - elapsed_time / self.lifetime)
+        self.alpha = max(0, np.exp(-elapsed_time / self.lifetime))
+
+        if elapsed_time > self.lifetime or self.alpha < 0.01:
+            self.alpha = 0 # Stop it from displaying if the lifetime is exceeded.
 
         # Movement logic improved to ensure particles stay visible
         self.y -= self.speed
         self.x = max(0, min(WIDTH, self.x + np.sin(time_pos * 2) * 2))
+
+        if self.alpha == 0 and args.debug == True:
+            logger.info("Zero alpha found.")
 
     def delete(self):
         pass
@@ -68,11 +83,26 @@ class ParticleList:
             self.particles.remove(particle)
 
     def zero_a_cleanup(self):
-        self.particles = [p for p in self.particles if p.alpha > 0]
+        if args.debug == True:
+            b4 = len(self.particles)
+            zero_a_parts = 0
+            for p in self.particles:
+                if p.alpha == 0:
+                    zero_a_parts += 1
+            print(f'There are {zero_a_parts} particles with 0 alpha.')
+        self.particles = [p for p in self.particles if p.alpha > 0.001]
+        if args.debug == True:
+            logger.info('Removed %s particles.', (b4 - len(self.particles)))
+
+    def get_particle_num(self):
+        return len(self.particles)
 
     def update_all(self, time_pos):
         for particle in self.particles:
             particle.update(time_pos)
+        
+        self.particles.sort(key=lambda p: p.alpha, reverse=True) # Sort by alpha, descending.
+        self.particles = self.particles[:1200]
 
 particles = ParticleList()
 
@@ -93,51 +123,38 @@ process = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
 # Frame update function
 def update(frame):
     time_pos = frame / FPS
-    ax.clear()  # Clears previous frame content
+    ax.clear()
     ax.set_facecolor('black')
-    ax.axis('on')  # Enable axes temporarily   
     ax.set_xlim(0, WIDTH)
     ax.set_ylim(0, HEIGHT)
-    ax.axhline(HEIGHT // 2, color='white', linestyle='--', linewidth=1)
-    ax.axvline(WIDTH // 2, color='white', linestyle='--', linewidth=1)
-
+    
     # --- Particle Generation Logic ---
-    # MAX_PARTICLES = 1000 # Max of 1000 particles to avoid clutter
-    
-    # if len(particles) < MAX_PARTICLES:
-    
     rms_energy = rms[int(time_pos * sr // 512)] if int(time_pos * sr // 512) < len(rms) else 0
-    num_particles = int(rms_energy * 50)  # Scales particle count to loudness
-
-    # for _ in range(max(10, num_particles)):  # Ensures a base number of particles
-    #     x = random.randint(0, WIDTH)
-    #     y = random.randint(0, HEIGHT)
-    #     color = (random.random(), random.random(), random.random()) # Change this later
-    #     size = random.randint(10, 40)
-    #     speed = random.uniform(2, 6)
-    #     particles.add(Particle(x, y, color, size, speed))
-
-    # Generate particles on RMS peaks (loudness spikes)
-    rms_value = rms[frame % len(rms)]
-    if rms_value > np.percentile(rms, 90):  # Top 10% of loudness
-        for _ in range(30):  # Less intense than beat-triggered particles
-            x = random.randint(0, WIDTH)
-            y = random.randint(0, HEIGHT)
-            color = (random.random(), random.random(), 0.5)  # Blue-tinted particles for loudness
-            size = random.randint(5, 20)
-            speed = random.uniform(1, 4)
+    chroma_values = chromagram[:, min(frame % chromagram.shape[1], chromagram.shape[1] - 1)]
+    
+    # Generate particles on **beats** for stronger synchronization
+    if any(abs(time_pos - beat_time) < 0.1 for beat_time in beats):  # Small window around beats
+        for _ in range(30):
+            x, y = random.randint(0, WIDTH), random.randint(HEIGHT // 2 - 50, HEIGHT // 2 + 50)
+            color = (1.0, random.random(), 0.5)  # Warm colors for beats
+            size, speed = random.randint(15, 50), random.uniform(3, 7)
             particles.add(Particle(x, y, color, size, speed))
-
-    # # Generate particles from chromagram activity
-    # chroma_values = chromagram[:, frame % chromagram.shape[1]]
-    # if np.max(chroma_values) > 0.8:  # High chroma intensity
-    #     for _ in range(20):  # Medium intensity response
-    #         x = random.randint(0, WIDTH)
-    #         y = HEIGHT // 2
-    #         color = (random.random(), 0.5, random.random())  # Purple-tinted particles for notes
-    #         size = random.randint(10, 30)
-    #         speed = random.uniform(2, 6)
-    #         particles.append(Particle(x, y, color, size, speed))
+    
+    # Generate particles **for musical notes (chromagram peaks)**
+    if np.max(chroma_values) > 0.8:
+        for _ in range(10):  # Moderate response to strong notes
+            x, y = random.randint(0, WIDTH), random.randint(0, HEIGHT)
+            color = (random.random(), 0.5, random.random())  # Purple-tinted
+            size, speed = random.randint(10, 30), random.uniform(2, 6)
+            particles.add(Particle(x, y, color, size, speed))
+    
+    # Generate particles **from RMS loudness spikes**
+    if rms_energy > np.percentile(rms, 90):  # Only on high-energy sections
+        for _ in range(20):
+            x, y = random.randint(0, WIDTH), random.randint(0, HEIGHT)
+            color = (random.random(), random.random(), 0.5)  # Blue-tinted
+            size, speed = random.randint(5, 20), random.uniform(1, 4)
+            particles.add(Particle(x, y, color, size, speed))
 
     # Generate particles from beats (still included for impact moments)
     if any(abs(time_pos - beat_time) < 0.5 for beat_time in beats):
@@ -151,7 +168,7 @@ def update(frame):
 
     # --- Particle Management ---
 
-    particles.update_all()
+    particles.update_all(time_pos)
 
     for particle in particles.particles:
         if particle.alpha > 0:
@@ -162,7 +179,10 @@ def update(frame):
                                     edgecolor='white')
             ax.add_patch(circle)
     
-    particles.cleanup()
+    if args.debug == True:
+        logger.info('Frame %s: %s particles', frame, len(particles.particles))
+
+    particles.zero_a_cleanup()
 
     #print(f"Frame {frame}: {len(particles)} particles active")  # Debugging particle count
 
@@ -181,9 +201,8 @@ for f in files: # Clear all debug frames
     os.remove(f)
 
 
-total_frames = int(len(y) / sr * FPS)
 print("Encoding video with FFmpeg...")
-for frame_idx in range(total_frames):
+for frame_idx in range(int(times[-1] * FPS)):
     update(frame_idx)
     if frame_idx % 100 == 0:
         plt.savefig(f'./debug_frames/frame_{frame_idx}.png')
