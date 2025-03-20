@@ -15,9 +15,12 @@ parser.add_argument('infile')
 parser.add_argument('-d', '--debug', action='store_true')
 args = parser.parse_args()
 
+if os.path.isfile('./debug.log') and args.debug == True: # Fresh debug log every time we debug to ensure no crossover.
+    os.remove('./debug.log')
+
 if args.debug == True:
     logger = logging.getLogger(__name__)
-    logging.basicConfig(filename='debug.log')
+    logging.basicConfig(filename='debug.log', encoding='utf-8', level=logging.INFO) # Use this to calm down the print statements.
 
 # Create output directory if it doesn't exist
 if not os.path.exists('./mp4s'):
@@ -65,11 +68,9 @@ class Particle:
         self.y -= self.speed
         self.x = max(0, min(WIDTH, self.x + np.sin(time_pos * 2) * 2))
 
-        if self.alpha == 0 and args.debug == True:
-            logger.info("Zero alpha found.")
+        # if self.alpha == 0 and args.debug == True: # Particles *do* reach zero alpha!
+        #     logger.info("Zero alpha found.")
 
-    def delete(self):
-        pass
 
 class ParticleList:
     def __init__(self):
@@ -89,7 +90,7 @@ class ParticleList:
             for p in self.particles:
                 if p.alpha == 0:
                     zero_a_parts += 1
-            print(f'There are {zero_a_parts} particles with 0 alpha.')
+            logger.info('There are %s zero-alpha particles.', zero_a_parts)
         self.particles = [p for p in self.particles if p.alpha > 0.001]
         if args.debug == True:
             logger.info('Removed %s particles.', (b4 - len(self.particles)))
@@ -202,6 +203,7 @@ for f in files: # Clear all debug frames
 
 
 print("Encoding video with FFmpeg...")
+logging.info('Frames to encode: %s', times[-1] * FPS)
 for frame_idx in range(int(times[-1] * FPS)):
     update(frame_idx)
     if frame_idx % 100 == 0:
