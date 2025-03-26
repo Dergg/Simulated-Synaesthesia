@@ -148,7 +148,7 @@ def update(frame):
     
     # Drum hit detection
     if any(abs(time_pos - onset) < 0.05 for onset in onset_frames):
-        for _ in range(25):
+        for _ in range(10):
             x, y = random.randint(0, WIDTH), random.randint((HEIGHT // 2) - 50, (HEIGHT // 2) + 50)
             size, speed = random.randint(20, 50), random.uniform(3, 7)
             particles.add(Particle(x, y, (0.6, 0.6, 0.6), size, speed)) # Grey particles for drum hits
@@ -156,18 +156,27 @@ def update(frame):
     dominant_key = np.argmax(chroma_values) # Find the most forward note
 
     if dominant_key in major:
-        base_col = (1.0, 0.5, 0.2) # Warm colour if it's a major key
+        # base_col = (1.0, 0.5, 0.2) # Warm colour if it's a major key
+        R = 1.0
+        G = 0.5
+        B = 0.2
     else:
-        base_col = (0.2, 0.5, 1.0) # Cool colour if it's a minor key
+        # base_col = (0.2, 0.5, 1.0) # Cool colour if it's a minor key
+        R = 0.2
+        G = 0.5
+        B = 1.0
 
     # Chroma based particle drawing
     for i, intensity in enumerate(chroma_values):
         if intensity > 0.7: # Only have the stronger notes trigger a particle
             x, y = random.randint(0, WIDTH), random.randint(0, HEIGHT)
             brightness = intensity
-            colour = tuple(min(1.0, c * brightness) for c in base_col)  # Adjust brightness depending on pitch
+            R = min(1.0, R * brightness)
+            G = min(1.0, G * brightness)
+            B = min(1.0, B * brightness)
+            # Adjust brightness depending on pitch
             size, speed = random.randint(10, 40), random.uniform(2, 6)
-            particles.add(Particle(x, y, colour, size, speed))
+            particles.add(Particle(x, y, (R, G, B), size, speed))
 
     # RMS / Loudness-based particle drawing
     if rms_norm[int((time_pos * sr) // 512)] > 0.8:
