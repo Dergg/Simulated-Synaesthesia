@@ -7,7 +7,9 @@ This program, known as **PSVis** (Programmatic Synesthesia Visualisation) aims t
 Below is a video example of what this program has created (which can be found in the mp4s folder).
 
 <html>
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/7uXCbUfj4QM?si=Pm8_UiSldcIpN8gO" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    <head>
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/7uXCbUfj4QM?si=Pm8_UiSldcIpN8gO" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    </head>
 </html>
 
 How to run:
