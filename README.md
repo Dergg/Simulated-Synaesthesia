@@ -16,3 +16,6 @@ How to run:
 - You can optionally add '-d' at the end to create a new debug.log file to ensure everything is running smoothly
 - Wait! This process will take a while, so maybe make yourself some food, a drink, take a little break while it runs
 - When the program finishes, it'll create a visualisation file in a newly created mp4s folder.
+
+NOTE:
+This will only work with Linux / WSL builds; at least as far as we know -- it could work on Windows? But we haven't tested it yet.
