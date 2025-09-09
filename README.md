@@ -1,4 +1,4 @@
-# IMC-Coursework
+# Simulated Synaethesia Audio Visualisation
 
 Synesthesia is a neurological phenomenon in which the brain "crosses the wires" between different sensory experiences. The most common instance of synesthesia is known as chromasthesia, in which a person may experience visual sensations when listening to music.
 
