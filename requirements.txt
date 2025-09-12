@@ -1,0 +1,12 @@
+Requirements:
+Librosa (we use 0.11.0)
+Matplotlib (we use 3.9.4)
+NumPy (we use 1.26.4)
+FFMPEG (we use 1.4)
+
+Please pip install these packages if you haven't already.
+
+IMPORTANT: FFMPEG is NOT installable through pip, please install it separately.
+On Ubuntu/Debian based systems, you can install it through: sudo apt-get install ffmpeg
+
+We haven't tested this on Windows, but you can download a build from https://ffmpeg.org/download.html and add it to your PATH, which should do a similar job. (ymmv)

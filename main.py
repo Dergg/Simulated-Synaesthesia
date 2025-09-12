@@ -1,19 +1,22 @@
 # Imports
-import librosa as lib # For music data analysis and extraction
-import numpy as np # Mathsy stuff
-import matplotlib.pyplot as plt       ## Using these two to plot each frame individually
-import matplotlib.patches as patches  ## by using MatPlotLib like a scatter graph
 import subprocess # For running FFMPEG encoding directly through a pipe
 import argparse # Parsing arguments
 import random # For random particle placement
 import os # For doing various tasks like making/deleting files/directories
 import logging # For debugging purposes
+import glob
+import gc # Garbage collection
+import time
+import librosa as lib # For music data analysis and extraction
+import numpy as np # For numerical operations
+import matplotlib.pyplot as plt       ## Using these two to plot each frame individually
+import matplotlib.patches as patches  ## by using MatPlotLib like a scatter graph
 
 
-# Parse arguments (this is my new favourite Python thing)
+# Parse arguments
 parser = argparse.ArgumentParser(prog='PSvis', description='Programmatic Synaesthesia Visualisation algorithm')
 parser.add_argument('infile') # The music file you want to read; should be in the /wavs folder, stored as 'filename.wav'
-parser.add_argument('-d', '--debug', action='store_true') # Enable debugging to a debug.log file (among other things)
+parser.add_argument('-d', '--debug', action='store_true') # Enable debugging to a debug.log file
 args = parser.parse_args()
 
 if os.path.isfile('./debug.log') and args.debug == True: # Fresh debug log every time we debug to ensure no crossover.
@@ -21,7 +24,7 @@ if os.path.isfile('./debug.log') and args.debug == True: # Fresh debug log every
 
 if args.debug == True:
     logger = logging.getLogger(__name__)
-    logging.basicConfig(filename='debug.log', encoding='utf-8', level=logging.INFO) # Use this to calm down the print statements.
+    logging.basicConfig(filename='debug.log', encoding='utf-8', level=logging.INFO)
 
 # Create output directory if it doesn't exist
 if not os.path.exists('./mp4s'):
@@ -42,7 +45,6 @@ onset_env = lib.onset.onset_strength(y=y, sr=sr, hop_length=512) # Onset detecti
 onset_frames = lib.onset.onset_detect(y=y, sr=sr, hop_length=512, units='time')
 spec_con = lib.feature.spectral_contrast(y=y, sr=sr) # Calculate spectral contrast
 major = [0, 2, 4, 5, 7, 9, 11] # C, D, E, F, G, A, B
-# Leaving out minor for memory efficiency: if it's not major, it's minor
 
 n_fft = 2048 * 4 # Length of signal after padding with 0s. Default value (2048) set to power of 2 (4) to optimise speed of FFT.
 times = lib.frames_to_time(np.arange(spec_db.shape[1]), sr=sr, hop_length=512, n_fft=n_fft) # Convert the frames to time to access data
@@ -53,7 +55,8 @@ fig, ax = plt.subplots(figsize=(WIDTH / 100, HEIGHT / 100), dpi=100)
 
 class Particle: # This is the fun part!
     def __init__(self, x, y, colour, size, speed, lifetime=3):
-        """Initialise a particle with a location, colour, size and speed."""
+        """Initialise a particle with a location, colour, size and speed.
+        The lifetime can be adjusted to make particles last longer or shorter. The default is 3 seconds."""
         self.x = x
         self.y = y
         self.colour = colour
@@ -64,7 +67,8 @@ class Particle: # This is the fun part!
         self.alpha = 1.0
 
     def update(self, time_pos):
-        """Update the particle at a given time, moving it and changing transparency."""
+        """Update the particle at a given time, moving it and changing transparency.
+        time_pos -- The current time position in seconds."""
         if self.start_time == None:
             self.start_time = time_pos # Ensure all start times are rendered properly
         elapsed_time = time_pos - self.start_time
@@ -77,11 +81,8 @@ class Particle: # This is the fun part!
         self.y -= self.speed
         self.x = max(0, min(WIDTH, self.x + np.sin(time_pos * 2) * 2))
 
-        # if self.alpha == 0 and args.debug == True: # Particles *do* reach zero alpha!
-        #     logger.info("Zero alpha found.")
 
-
-class ParticleList: # Class for the particle list for easier management (and prettiness)
+class ParticleList: # Class for the particle list for easier management
     def __init__(self):
         """Define a list of particles."""
         self.particles = []
@@ -98,7 +99,7 @@ class ParticleList: # Class for the particle list for easier management (and pre
     def zero_a_cleanup(self):
         """Clean up all particles with a low transparency to reduce computational strain."""
         if args.debug == True:
-            b4 = len(self.particles) # Because typing 'before' is so 2020
+            before = len(self.particles) # The number of particles before cleanup
             zero_a_parts = 0
             for p in self.particles:
                 if p.alpha == 0:
@@ -106,7 +107,7 @@ class ParticleList: # Class for the particle list for easier management (and pre
             logger.info('There are %s zero-alpha particles.', zero_a_parts)
         self.particles = [p for p in self.particles if p.alpha > 0.001] # Remove particles that haven't been removed yet
         if args.debug == True:
-            logger.info('Removed %s particles.', (b4 - len(self.particles)))
+            logger.info('Removed %s particles.', (before - len(self.particles))) # Number of particles removed
 
     def get_particle_num(self):
         """Get the number of particles in the list."""
@@ -114,14 +115,15 @@ class ParticleList: # Class for the particle list for easier management (and pre
 
     def update_all(self, time_pos):
         """Update all particles and limit the number of particles to 500 to speed up rendering and limit clutter.
-        Removes the particles with the lowest alpha, in case they're not picked up by other functions."""
+        Removes the particles with the lowest alpha, in case they're not picked up by other functions.\n
+        time_pos -- The current time position in seconds."""
         for particle in self.particles:
             particle.update(time_pos)
         
         self.particles.sort(key=lambda p: p.alpha, reverse=True) # Sort by alpha, descending.
         self.particles = self.particles[:500] # Limit the number of particles to speed up rendering and limit clutter
 
-particles = ParticleList() # Use a specialised ParticleList for easier functionality.
+particle_list = ParticleList() # Use a specialised ParticleList for easier functionality.
 
 if os.path.isfile(f'./mp4s/{args.infile}-vis.mp4'): # Remove the file if it already exists
     os.remove(f'./mp4s/{args.infile}-vis.mp4')
@@ -140,10 +142,8 @@ ffmpeg_cmd = [
     "-c:a", "aac", "-b:a", "192k",
     "-shortest", output_video
 ]
-# Big old FFMPEG command: basically, take 2 inputs (stdin, audio) and encode them together, synchronised with the
-# audio that is provided. Encode with libx264 and a rawvideo video codec, plus an rgb24 pixel format.
-# It is for these reasons the video will not show on mobile, though the created YouTube video should (hopefully) show 
-# anywhere and everywhere. Check the README!
+
+# Take input (stdin, audio), encode together, synchronised. These videos will not show on mobile.
 ffmpeg_p = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
 
 # Frame update function
@@ -159,15 +159,13 @@ def update(frame):
     l_factor = rms_norm[int(time_pos * sr // 512)]
     chroma_values = chromagram[:, min(frame % chromagram.shape[1], chromagram.shape[1] - 1)] 
     # Grab the chromagram values at this frame
-    
-    sc_norm = spec_con[:, min(frame % spec_con.shape[1], spec_con.shape[1] - 1)]
 
     # Drum hit detection
     if any(abs(time_pos - onset) < 0.05 for onset in onset_frames):
         for _ in range(10):
             x, y = random.randint(0, WIDTH), random.randint((HEIGHT // 2) - 50, (HEIGHT // 2) + 50)
             size, speed = random.randint(20, 50), random.uniform(3, 7)
-            particles.add(Particle(x, y, (0.6, 0.6, 0.6), size, speed)) # Grey particles for drum hits
+            particle_list.add(Particle(x, y, (0.6, 0.6, 0.6), size, speed)) # Grey particles for drum hits
 
     dominant_key = np.argmax(chroma_values) # Find the most "forward" note
 
@@ -194,20 +192,20 @@ def update(frame):
             # Adjust brightness depending on pitch
             size = int(10 + (30 * intensity))
             speed = 2 + (4 * intensity) # More intense notes = bigger, faster-moving notes
-            particles.add(Particle(x, y, (R, G, B), size, speed))
+            particle_list.add(Particle(x, y, (R, G, B), size, speed))
 
     # RMS / Loudness-based particle drawing
     if l_factor > 0.8:
         for _ in range(10):
             x, y = random.randint(0, WIDTH), random.randint(0, HEIGHT)
             size, speed = random.randint(5, 25), random.uniform(1, 4)
-            particles.add(Particle(x, y, (1.0, 0.5, 0.5), size, speed))  # Soft red burst
+            particle_list.add(Particle(x, y, (1.0, 0.5, 0.5), size, speed))  # Soft red burst
 
     # --- Particle Management ---
 
-    particles.update_all(time_pos) # Update all particles
+    particle_list.update_all(time_pos) # Update all particles
 
-    for particle in particles.particles:
+    for particle in particle_list.particles: 
         if particle.alpha > 0: # Draw all visible particles
             circle = patches.Circle((particle.x, particle.y),
                                     particle.size,
@@ -217,28 +215,22 @@ def update(frame):
             ax.add_patch(circle)
     
     if args.debug == True:
-        logger.info('Frame %s: %s particles', frame, len(particles.particles)) # Print debug information
+        logger.info('Frame %s: %s particles', frame, len(particle_list.particles)) # Print debug information
 
-    particles.zero_a_cleanup() # Clean up particles with zero alpha (invisible)
+    particle_list.zero_a_cleanup() # Destroy invisible particles
 
     # For direct to FFMPEG stuff
     fig.canvas.draw()
-    plt.pause(0.001) # Slight pause to allow catchup (I don't know if this works but I'm too scared to remove it)
+    plt.pause(0.001) # Slight pause to allow catchup
     plt.gcf().canvas.flush_events()
     frame_data = np.array(fig.canvas.renderer.buffer_rgba())[:, :, :3] # :3
     frame_data = np.flip(frame_data, axis=0)  # Correct orientation for FFmpeg
     ffmpeg_p.stdin.write(frame_data.tobytes()) # Write the data to the STDIN pipe to be encoded by FFMPEG.
 
-    
-
-import glob
 
 files = glob.glob('./debug_frames/*')
 for f in files: # Clear all debug frames
     os.remove(f)
-
-import gc # Other imports, specifically for this part
-import time
 
 total_frames = int(times[-1] * FPS)
 
@@ -249,7 +241,7 @@ for frame_idx in range(total_frames):
         plt.savefig(f'./debug_frames/frame_{frame_idx}.png')
         gc.collect() # Collect the garbage
         ffmpeg_p.stdin.flush() # Flush the pipe once every so often to keep it all running nice
-        time.sleep(0.01) # Give the processor a tiny moment to catch up (probably not needed but I'm scared to remove it)
+        time.sleep(0.01) # Pause to allow catchup
 
 ffmpeg_p.stdin.close()
 ffmpeg_p.wait()
